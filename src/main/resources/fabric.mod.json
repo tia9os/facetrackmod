@@ -1,0 +1,37 @@
+{
+	"schemaVersion": 1,
+	"id": "facetrackermod",
+	"version": "${version}",
+	"name": "facetrackermod",
+	"description": "Syncs webcam expression data from the local Face Expression Client and renders emotion overlays on player faces.",
+	"authors": [
+		"Antara89"
+	],
+	"contact": {
+		"homepage": "https://fabricmc.net/"
+	},
+	"license": "CC0-1.0",
+	"icon": "assets/facetrackermod/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"com.testmod.TestMod"
+		],
+		"client": [
+			"com.testmod.TestModClient"
+		]
+	},
+	"mixins": [
+		"facetrackermod.mixins.json",
+		{
+			"config": "facetrackermod.client.mixins.json",
+			"environment": "client"
+		}
+	],
+	"depends": {
+		"fabricloader": ">=0.18.4",
+		"minecraft": "~1.21.1",
+		"java": ">=21",
+		"fabric-api": "*"
+	}
+}

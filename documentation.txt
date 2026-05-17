@@ -1,0 +1,213 @@
+# facetrackermod
+
+facetrackermod connects a local webcam expression tracker to Minecraft and displays the detected emotion on the player's face. It is built for Fabric 1.21.1 by Antara89 and includes a standalone Java desktop client in the `./client` folder.
+
+The companion client reads your webcam locally, estimates your current facial expression, and sends compact expression data to Minecraft over localhost. The Fabric mod receives that data, syncs it through the server, and renders face overlay textures on players so other players can see the expression too.
+
+## Features
+
+- Real-time webcam expression tracking through the included Java client.
+- Optional modern ONNX landmark tracker in the Java client, with OpenCV fallback.
+- Multiplayer expression sync through Fabric networking.
+- Player face overlays for neutral, happy, funny, sad, surprised, talking, blinking, winking, and focused expressions.
+- Static technical difficulties face when no live face expression is available.
+- Optional layered face parts for mouth, left eye, right eye, left eyebrow, and right eyebrow.
+- Custom 8x8 PNG face textures loaded from `run/expressions`.
+- `base.png` support for replacing the original face background before the expression is drawn.
+- Optional microphone voice-activity input in `./client` to improve talking detection.
+- Texture sync: each player's local expression texture set is uploaded to the server and distributed to other clients when they join.
+- Optional local HUD face preview with configurable corner, side, offset, and scale.
+- Local recording and snapshot tools in the desktop client for testing and tuning.
+
+## How It Works
+
+1. Install the Fabric mod on the Minecraft client and server.
+2. Start Minecraft with the mod installed.
+3. Run the companion app from the repository root:
+
+```bash
+./gradlew -p client run
+```
+
+On Windows, use:
+
+```powershell
+.\gradlew.bat -p client run
+```
+
+4. Start the camera in the Face Expression Client.
+5. The client sends expression updates to the Minecraft client over `127.0.0.1:34321`.
+6. If the server has the mod installed, the Minecraft client sends the expression state and texture set to the server.
+7. Modded servers distribute it to other modded clients. On normal servers, the expression face still renders locally for you, but other players cannot see it.
+
+## Custom Textures
+
+Expression textures are stored in:
+
+```text
+run/expressions/
+```
+
+Supported files:
+
+```text
+base.png
+neutral.png
+happy.png
+funny.png
+sad.png
+surprised.png
+talking.png
+blinking.png
+winking.png
+focused.png
+```
+
+Each file should be an 8x8 PNG. Transparent pixels in expression textures allow the `base.png` layer to show through. Transparent pixels in `base.png` allow the original Minecraft skin face to show through.
+
+The technical difficulties face for the `no_face` state is packaged at `src/main/resources/assets/facetrackermod/textures/expression/technical_difficulties.png`. It is not loaded from `run/expressions` and is not synced as a customizable texture. It can be disabled in the client config with:
+
+```text
+technicalDifficultiesFace.enabled=false
+```
+
+Layered face parts are opt-in. Create this folder to enable them:
+
+```text
+run/expressions/parts/
+```
+
+When the `parts` folder exists, the mod creates and syncs missing default part textures and renders these layers instead of the full-expression PNG whenever all selected parts are available:
+
+```text
+parts/mouth/neutral.png
+parts/mouth/happy.png
+parts/mouth/funny.png
+parts/mouth/sad.png
+parts/mouth/surprised.png
+parts/mouth/talking.png
+parts/left_eye/open.png
+parts/left_eye/closed.png
+parts/left_eye/focused.png
+parts/right_eye/open.png
+parts/right_eye/closed.png
+parts/right_eye/focused.png
+parts/left_eyebrow/neutral.png
+parts/left_eyebrow/raised.png
+parts/left_eyebrow/sad.png
+parts/left_eyebrow/focused.png
+parts/right_eyebrow/neutral.png
+parts/right_eyebrow/raised.png
+parts/right_eyebrow/sad.png
+parts/right_eyebrow/focused.png
+```
+
+## Client Tracker Backends
+
+The desktop client defaults to the `OpenCV` tracker. This is the existing local heuristic tracker and requires no external model.
+
+The client also has a `Modern ONNX` tracker backend for OpenFace-style landmark geometry. It uses ONNX Runtime and a local facial-landmark model when configured:
+
+```bash
+./gradlew -Dfacetrack.onnx.model=/path/to/landmark-model.onnx -p client run
+```
+
+The ONNX backend supports common single-output 68-point or 98-point coordinate landmark models with a 4D float image input in NCHW or NHWC layout. Coordinates may be normalized `0..1`, normalized `-1..1`, or input-pixel coordinates. If the model is missing or unsupported, the client falls back to the OpenCV tracker and shows the reason in the Performance field. Keep a neutral face visible while the ONNX neutral baseline reaches 100%; press **Calibrate expression** with **Neutral** selected to relearn that baseline if the output gets biased.
+
+## Local Bridge
+
+The local UDP bridge listens on:
+
+```text
+127.0.0.1:34321
+```
+
+The mod still accepts the original FaceTrack packet format:
+
+```text
+facetrack|1|timestampMillis|expression|confidence|faceCount|smileScore|mouthOpen|mouthWide|sadScore|blinkScore|winkScore
+```
+
+The companion client now sends part-aware packets:
+
+```text
+facetrack_parts|1|timestampMillis|expression|confidence|faceCount|smileScore|mouthOpen|mouthWide|sadScore|blinkScore|winkScore|fps|mouth|leftEye|rightEye|leftEyebrow|rightEyebrow
+```
+
+In the desktop client, enable **Mic talking** and choose a **Mic** device to use microphone voice activity as a local signal. The microphone panel shows sensitivity and amplification sliders plus live level, noise-floor, and speech-gate gauges. Higher sensitivity aggressively lowers the speech gate for quieter microphones; lower sensitivity ignores more background noise. Amplification boosts the measured microphone level before speech detection, with 100% meaning no boost. When enabled and available, microphone speech can switch the outgoing expression to `talking`, while microphone silence suppresses camera-only false talking detections. Microphone audio is processed locally and is not sent to Minecraft; only the final compact expression packet is sent.
+
+The `base.png` face layer is rendered for the local player even before the first expression packet arrives. Synced remote player base textures render after their texture set has been received.
+
+The mod can be used client-side on normal servers. In that mode, `/facetrack status` reports `Server sync: local only`; local face overlays and the HUD preview still work, but remote players do not receive your expression state or textures.
+
+## Trigger Commands
+
+Every expression and face part can be forced from an in-game client command for a fixed number of client ticks. Twenty ticks is about one second. Triggered faces use the normal local render and server sync path, so they can be seen by other modded clients when server sync is available.
+
+```text
+/facetrack trigger status
+/facetrack trigger clear
+/facetrack trigger expression funny 100
+/facetrack trigger expression no_face 40
+/facetrack trigger part mouth talking 60
+/facetrack trigger part left_eye closed 60
+/facetrack trigger part right_eye focused 60
+/facetrack trigger part left_eyebrow raised 60
+/facetrack trigger part right_eyebrow sad 60
+/facetrack trigger parts funny closed open raised raised 100
+```
+
+Supported expression values are `no_face`, `neutral`, `happy`, `sad`, `surprised`, `talking`, `blinking`, `winking`, `focused`, and `funny`.
+
+Supported mouth values are `neutral`, `happy`, `sad`, `surprised`, `talking`, and `funny`. Supported eye values are `open`, `closed`, and `focused`. Supported eyebrow values are `neutral`, `raised`, `sad`, and `focused`.
+
+## HUD Face Preview
+
+The mod can also render your local expression face as a HUD preview. It is disabled by default and defaults to the top-right corner when enabled.
+
+```text
+/facetrack hud on
+/facetrack hud off
+/facetrack hud status
+/facetrack hud corner top_right
+/facetrack hud corner top_left
+/facetrack hud corner bottom_right
+/facetrack hud corner bottom_left
+/facetrack hud side left
+/facetrack hud side right
+/facetrack hud side top
+/facetrack hud side bottom
+/facetrack hud offset 8 8
+/facetrack hud scale 6
+```
+
+The technical difficulties face can also be configured in game:
+
+```text
+/facetrack technical_difficulties on
+/facetrack technical_difficulties off
+/facetrack technical_difficulties status
+```
+
+The offset is measured inward from the selected corner. Side commands center the face on that side: left and right center it vertically, while top and bottom center it horizontally. Use `/facetrack hud offset` after choosing a side if you want to nudge the face away from that center. HUD and technical difficulties settings are saved in:
+
+```text
+run/config/facetrackermod-client.properties
+```
+
+## Privacy
+
+The webcam video is processed locally by the companion Java client. Video frames are not sent to the Minecraft server. The client only sends compact expression values to the local Minecraft client, and the mod syncs expression state and small 8x8 texture PNGs through the server.
+
+## Requirements
+
+- Minecraft 1.21.1
+- Fabric Loader
+- Fabric API
+- Java 21
+- A webcam for live expression tracking
+- The included `./client` app for webcam input
+
+## Notes
+
+Expression detection uses OpenCV Haar cascades and lightweight heuristics, so accuracy depends on lighting, camera position, and calibration. For best results, start with your face clearly visible and hold a neutral expression during calibration.

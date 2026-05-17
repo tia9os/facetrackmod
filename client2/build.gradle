@@ -1,0 +1,54 @@
+plugins {
+    id 'application'
+}
+
+group = 'com.facetrack'
+version = '1.0.0'
+
+def dl4jVersion = '1.0.0-M2.1'
+
+dependencies {
+    implementation('org.bytedeco:javacv:1.5.13') {
+        transitive = false
+    }
+    implementation 'org.bytedeco:javacpp:1.5.13'
+    implementation 'org.bytedeco:opencv-platform:4.13.0-1.5.13'
+    implementation("org.deeplearning4j:deeplearning4j-core:${dl4jVersion}") {
+        exclude group: 'org.datavec', module: 'datavec-data-image'
+        exclude group: 'org.deeplearning4j', module: 'deeplearning4j-datasets'
+    }
+    implementation "org.nd4j:nd4j-native-platform:${dl4jVersion}"
+    runtimeOnly 'org.slf4j:slf4j-simple:1.7.36'
+}
+
+application {
+    mainClass = 'com.facetrack.client2.AiFaceExpressionClient'
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+sourceSets {
+    main {
+        resources {
+            srcDir '../client/src/main/resources'
+        }
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release = 21
+}
+
+tasks.withType(JavaExec).configureEach {
+    workingDir = projectDir
+    System.properties.findAll { entry ->
+        entry.key.toString().startsWith('facetrack.')
+    }.each { key, value ->
+        systemProperty key.toString(), value
+    }
+}

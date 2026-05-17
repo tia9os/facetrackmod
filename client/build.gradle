@@ -1,0 +1,36 @@
+plugins {
+    id 'application'
+}
+
+group = 'com.facetrack'
+version = '1.0.0'
+
+dependencies {
+    implementation 'org.bytedeco:javacv:1.5.13'
+    implementation 'org.bytedeco:opencv-platform:4.13.0-1.5.13'
+    implementation 'com.microsoft.onnxruntime:onnxruntime:1.25.1'
+}
+
+application {
+    mainClass = 'com.facetrack.client.FaceExpressionClient'
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release = 21
+}
+
+tasks.withType(JavaExec).configureEach {
+    workingDir = projectDir
+    System.properties.findAll { entry ->
+        entry.key.toString().startsWith('facetrack.')
+    }.each { key, value ->
+        systemProperty key.toString(), value
+    }
+}
